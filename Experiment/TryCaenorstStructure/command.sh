@@ -1,0 +1,2 @@
+#TryCaenorstStructure
+python /home/carlchang/YeNetTensorflow/Implement/main.py /home/carlchang/YeNetTensorflow/Experiment/TryCaenorstStructure/train/cover /home/carlchang/YeNetTensorflow/Experiment/TryCaenorstStructure/train/stego /home/carlchang/YeNetTensorflow/Experiment/TryCaenorstStructure/valid/cover /home/carlchang/YeNetTensorflow/Experiment/TryCaenorstStructure/valid/stego --gpu="0,1,2,3" --log-path="/home/carlchang/YeNetTensorflow/Experiment/TryCaenorstStructure/log" --use-batch-norm
