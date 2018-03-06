@@ -195,7 +195,7 @@ def train(model_class, use_batch_norm, use_shuf_pair,
             valid_accuracy_s.add_summary(sess, writer, global_train_batch)
 
             end_time = time.time()
-            print('--EPOCH:%d-- runtime: %.2fs learning_rate: %f' % (epoch ,end_time - start_time))
+            print('--EPOCH:%d-- runtime: %.2fs' % (epoch ,end_time - start_time))
 
             ##模型保存：如果valid_acc大于全局valid_acc，则保存
             if local_valid_accuracy > global_valid_accuracy:
