@@ -198,8 +198,8 @@ def train(model_class, use_batch_norm, use_shuf_pair,
             print('--EPOCH:%d-- runtime: %.2fs' % (epoch ,end_time - start_time))
 
             ##模型保存：如果valid_acc大于全局valid_acc，则保存
-            if local_valid_accuracy > global_valid_accuracy:
-                global_valid_accuracy = local_valid_accuracy
+            if local_valid_accuracy_value > global_valid_accuracy:
+                global_valid_accuracy = local_valid_accuracy_value
                 saver.save(sess, log_path + '/Model_' + str(epoch) + '.ckpt')
                 print('---EPOCH:%d--- model has been saved' % (epoch))
 
