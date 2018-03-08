@@ -1,37 +1,9 @@
 import os
+import shutil
 import numpy as np
 import tensorflow as tf
 from scipy import misc, io
-from glob import glob
-import random
-from random import random as rand
 from random import shuffle
-
-def file_clean(cover_dir, stego_dir):
-    """
-    对cover和stego里的文件进行清理，将只存在于单个文件夹的文件、后缀名不匹配的文件删除。
-    """
-    cover_dir = cover_dir + '/'
-    stego_dir = stego_dir + '/'
-    cover_list = []
-    stego_list = []
-    for root, dirs, files in os.walk(cover_dir):
-        for filenames in files:
-            cover_list.append(filenames)
-    for root, dirs, files in os.walk(stego_dir):
-        for filenames in files:
-            stego_list.append(filenames)
-    diff_cover_list = set(cover_list).difference(set(stego_list))
-    diff_stego_list = set(stego_list).difference(set(cover_list))
-    print('About to delete: ', len(diff_cover_list), 'files in ', cover_dir, 'Continue?')
-    os.system('pause')
-    for filenames in diff_cover_list:
-        os.remove(cover_dir + filenames)
-    print('About to delete: ', len(diff_stego_list), 'files in ', stego_dir, 'Continue?')
-    os.system('pause')
-    for filenames in diff_stego_list:
-        os.remove(stego_dir + filenames)
-    print('file_clean process has completed.')
 
 def get_files(cover_dir, stego_dir, use_shuf_pair=False):
     """
@@ -93,6 +65,120 @@ def get_minibatches_content_img(train_img_minibatch_list, img_height, img_width)
 
     return image_minibatch_content
 
+# *数据集分割主函数
+def data_split(source_dir, dest_dir,
+               batch_size,
+               train_percent=0.6,
+               valid_percent=0.2,
+               test_percent=0.2):
+    """
+    根据传入的source_dir中cover/stego图像路径，根据各percent参数
+    在dest_dir路径中分割成train/valid/test数据集
+    抽取方式是随机的
+    """
+    # *判断输入百分比是否合法
+    if (train_percent + valid_percent + test_percent) > 1:
+        raise ValueError('sum of train valid test percentage larger than 1')
+
+    if os.path.exists(dest_dir + '/') is False:
+        os.mkdir(dest_dir + '/')
+    if os.path.exists(source_dir + '/') is False:
+        raise OSError('source direction not exist')
+
+    source_cover_dir = source_dir + '/cover'
+    source_stego_dir = source_dir + '/stego'
+
+    # *清理非对应文件
+    file_clean(source_cover_dir, source_stego_dir)
+
+    # *在dest_dir路径下创建train/valid/test路径
+    dest_train_dir, dest_valid_dir, dest_test_dir = file_dir_mk_trainvalidtest_dir(dest_dir)
+
+    # *对source_dir中的文件顺序进行shuffle
+    source_cover_list = []
+    for filename in os.listdir(source_cover_dir + '/'):
+        source_cover_list.append(filename)
+    shuffle(source_cover_list)
+
+    # *计算train/valid/test数据集容量
+    half_batch_size = batch_size // 2
+    train_ds_capacity = ( int( len(source_cover_list)*train_percent ) // half_batch_size ) * half_batch_size
+    valid_ds_capacity = ( int( len(source_cover_list)*valid_percent ) // half_batch_size ) * half_batch_size
+    test_ds_capacity  = ( int( len(source_cover_list)*test_percent  ) // half_batch_size ) * half_batch_size
+
+    for fileidx in range(train_ds_capacity):
+        srcfile_cover = source_cover_dir + '/' + source_cover_list[fileidx]
+        dstfile_cover = dest_train_dir + '/cover/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_cover, dstfile_cover)
+        srcfile_stego = source_stego_dir + '/' + source_cover_list[fileidx]
+        dstfile_stego = dest_train_dir + '/stego/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_stego, dstfile_stego)
+    for fileidx in range(train_ds_capacity, train_ds_capacity + valid_ds_capacity):
+        srcfile_cover = source_cover_dir + '/' + source_cover_list[fileidx]
+        dstfile_cover = dest_valid_dir + '/cover/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_cover, dstfile_cover)
+        srcfile_stego = source_stego_dir + '/' + source_cover_list[fileidx]
+        dstfile_stego = dest_valid_dir + '/stego/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_stego, dstfile_stego)
+    for fileidx in range(train_ds_capacity + valid_ds_capacity,
+                          train_ds_capacity + valid_ds_capacity + test_ds_capacity):
+        srcfile_cover = source_cover_dir + '/' + source_cover_list[fileidx]
+        dstfile_cover = dest_test_dir + '/cover/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_cover, dstfile_cover)
+        srcfile_stego = source_stego_dir + '/' + source_cover_list[fileidx]
+        dstfile_stego = dest_test_dir + '/stego/' + source_cover_list[fileidx]
+        shutil.copyfile(srcfile_stego, dstfile_stego)
+
+def file_clean(cover_dir, stego_dir):
+    """
+    对cover和stego里的文件进行清理，将只存在于单个文件夹的文件、后缀名不匹配的文件删除。
+    """
+    cover_dir = cover_dir + '/'
+    stego_dir = stego_dir + '/'
+    cover_list = []
+    stego_list = []
+    for root, dirs, files in os.walk(cover_dir):
+        for filenames in files:
+            cover_list.append(filenames)
+    for root, dirs, files in os.walk(stego_dir):
+        for filenames in files:
+            stego_list.append(filenames)
+    diff_cover_list = set(cover_list).difference(set(stego_list))
+    diff_stego_list = set(stego_list).difference(set(cover_list))
+    print('Start file cleaning...')
+    print('About to delete: ', len(diff_cover_list), 'files in ', cover_dir)
+    for filenames in diff_cover_list:
+        os.remove(cover_dir + filenames)
+    print('About to delete: ', len(diff_stego_list), 'files in ', stego_dir)
+    for filenames in diff_stego_list:
+        os.remove(stego_dir + filenames)
+
+def file_dir_mk_trainvalidtest_dir(dest_dir):
+    """
+    在dest_dir路径下创建train/valid/test路径
+    """
+    if os.path.exists(dest_dir + '/train/') is False:
+        os.mkdir(dest_dir + '/train/')
+    if os.path.exists(dest_dir + '/train/cover/') is False:
+        os.mkdir(dest_dir + '/train/cover/')
+    if os.path.exists(dest_dir + '/train/stego/') is False:
+        os.mkdir(dest_dir + '/train/stego/')
+    if os.path.exists(dest_dir + '/valid/') is False:
+        os.mkdir(dest_dir + '/valid/')
+    if os.path.exists(dest_dir + '/valid/cover/') is False:
+        os.mkdir(dest_dir + '/valid/cover/')
+    if os.path.exists(dest_dir + '/valid/stego/') is False:
+        os.mkdir(dest_dir + '/valid/stego/')
+    if os.path.exists(dest_dir + '/test/') is False:
+        os.mkdir(dest_dir + '/test/')
+    if os.path.exists(dest_dir + '/test/cover/') is False:
+        os.mkdir(dest_dir + '/test/cover/')
+    if os.path.exists(dest_dir + '/test/stego/') is False:
+        os.mkdir(dest_dir + '/test/stego/')
+    if os.path.exists(dest_dir + '/log/') is False:
+        os.mkdir(dest_dir + '/log/')
+    return dest_dir + '/train', dest_dir + '/valid', dest_dir + '/test'
+
 """
 def get_batches(img, img_label, batch_size, capacity):
     #
@@ -124,81 +210,3 @@ def get_batches(img, img_label, batch_size, capacity):
 
     return image_batch, label_batch
 """
-
-#-----------------------------------------------
-
-def gen_all_flip_and_rot(cover_dir, stego_dir, thread_idx, n_threads):
-    cover_list = sorted(glob(cover_dir + '/*'))
-    stego_list = sorted(glob(stego_dir + '/*'))
-    nb_data = len(cover_list)
-    assert len(stego_list) != 0, "the beta directory '%s' is empty" % stego_dir
-    assert nb_data != 0, "the cover directory '%s' is empty" % cover_dir
-    assert len(stego_list) == nb_data, "the cover directory and " + \
-                                      "the beta directory don't " + \
-                                      "have the same number of files " + \
-                                      "respectively %d and %d" % (nb_data, + \
-                                      len(stego_list))
-    img = misc.imread(cover_list[0])
-    img_shape = img.shape
-    batch = np.empty((2,img_shape[0],img_shape[1],1), dtype='uint8')
-    iterable = zip(cover_list, stego_list)
-    for cover_path, stego_path in iterable:
-        batch[0,:,:,0] = misc.imread(cover_path)
-        batch[1,:,:,0] = misc.imread(stego_path)
-        for rot in range(4):
-            yield [np.rot90(batch, rot, axes=[1,2]), np.array([0,1], dtype='uint8')]
-        for rot in range(4):
-            yield [np.flip(np.rot90(batch, rot, axes=[1,2]), axis=2), np.array([0,1], dtype='uint8')]
-
-def gen_flip_and_rot(cover_dir, stego_dir, shuf_pair=False, thread_idx=0, n_threads=1):
-    cover_list = sorted(glob(cover_dir + '/*'))
-    stego_list = sorted(glob(stego_dir + '/*'))
-    nb_data = len(cover_list)
-    assert len(stego_list) != 0, "the beta directory '%s' is empty" % stego_dir
-    assert nb_data != 0, "the cover directory '%s' is empty" % cover_dir
-    assert len(stego_list) == nb_data, "the cover directory and " + \
-                                      "the beta directory don't " + \
-                                      "have the same number of files " + \
-                                      "respectively %d and %d" % (nb_data, + \
-                                      len(stego_list))
-    img = misc.imread(cover_list[0])
-    img_shape = img.shape
-    batch = np.empty((2,img_shape[0],img_shape[1],1), dtype='uint8')
-    if not shuf_pair:##zsy改动：zip在python3中返回的是iterator，无法shuffle()
-        iterable = zip(cover_list, stego_list)
-    while True:
-        if shuf_pair:
-            shuffle(cover_list)
-            shuffle(stego_list)
-            iterable = zip(cover_list, stego_list)
-        #else:
-            #shuffle(iterable)  ##zsy改动：把shuffle的过程去掉
-        for cover_path, stego_path in iterable:
-            batch[0,:,:,0] = misc.imread(cover_path)
-            batch[1,:,:,0] = misc.imread(stego_path)
-            rot = random.randint(0,3)
-            if rand() < 0.5:
-                yield [np.rot90(batch, rot, axes=[1,2]), np.array([0,1], dtype='uint8')]
-            else:
-                yield [np.flip(np.rot90(batch, rot, axes=[1,2]), axis=2), np.array([0,1], dtype='uint8')]
-
-def gen_valid(cover_dir, stego_dir, thread_idx, n_threads):
-    cover_list = sorted(glob(cover_dir + '/*'))
-    stego_list = sorted(glob(stego_dir + '/*'))
-    nb_data = len(cover_list)
-    assert len(stego_list) != 0, "the beta directory '%s' is empty" % stego_dir
-    assert nb_data != 0, "the cover directory '%s' is empty" % cover_dir
-    assert len(stego_list) == nb_data, "the cover directory and " + \
-                                      "the beta directory don't " + \
-                                      "have the same number of files " + \
-                                      "respectively %d and %d" % (nb_data, \
-                                      len(stego_list))
-    img = misc.imread(cover_list[0])
-    img_shape = img.shape
-    batch = np.empty((2,img_shape[0],img_shape[1],1), dtype='uint8')
-    labels = np.array([0, 1], dtype='uint8')
-    while True:
-        for cover_path, stego_path in zip(cover_list, stego_list):
-            batch[0,:,:,0] = misc.imread(cover_path)
-            batch[1,:,:,0] = misc.imread(stego_path)
-            yield [batch, labels]

@@ -82,8 +82,7 @@ def train(model_class, use_batch_norm, use_shuf_pair,
                                name='input_image_batch')
     label_batch = tf.placeholder(tf.int32, [batch_size, ], name="input_label_batch")
     # 使用占位符初始化模型
-    model = model_class(is_training=False, data_format='NCHW',
-                        with_bn=use_batch_norm, tlu_threshold=3)
+    model = model_class(is_training, 'NCHW', with_bn=use_batch_norm, tlu_threshold=3)
     model._build_model(img_batch)
     loss, accuracy = model._build_losses(label_batch)
 
@@ -127,7 +126,7 @@ def train(model_class, use_batch_norm, use_shuf_pair,
                        tf.local_variables_initializer())
 
     # *定义模型保存变量，最大存储max_to_keep个模型
-    saver = tf.train.Saver(max_to_keep=max_epochs)
+    saver = tf.train.Saver(max_to_keep=max_epochs+20)
     global_valid_accuracy = 0  # 全局valid_acc最大值
 
     # *会话开始
@@ -152,11 +151,9 @@ def train(model_class, use_batch_norm, use_shuf_pair,
         global_train_batch = 0  # 全局batch计数
         for epoch in range(max_epochs):
             start_time = time.time()
-            # 加载test路径下的img及label列表
             train_img_list, train_label_list = get_files(train_cover_dir,
                                                          train_stego_dir,
                                                          use_shuf_pair=use_shuf_pair)
-            # 加载valid路径下的img及label列表
             valid_img_list, valid_label_list = get_files(valid_cover_dir,
                                                          valid_stego_dir,
                                                          use_shuf_pair=use_shuf_pair)
@@ -193,6 +190,12 @@ def train(model_class, use_batch_norm, use_shuf_pair,
                     train_loss_s.add_summary(sess, writer, global_train_batch)
                     train_accuracy_s.add_summary(sess, writer, global_train_batch)
 
+                # 对最后20个模型进行存储
+                if ((train_ds_size // batch_size) * max_epochs - global_train_batch) < 20:
+                    saver.save(sess, log_path + '/Model_' + str(epoch) + '.ckpt')
+                    print('---EPOCH:%d LAST:%d--- model has been saved'
+                          % (epoch, (train_ds_size // batch_size) * max_epochs - global_train_batch + 1))
+
             # *训练开始：validation
             sess.run(disable_training_op)
             local_valid_loss, local_valid_accuracy = 0, 0  # 本epoch中valid_loss和valid_acc值
@@ -221,10 +224,10 @@ def train(model_class, use_batch_norm, use_shuf_pair,
             valid_accuracy_s.add_summary(sess, writer, global_train_batch)
 
             # *模型保存：如果valid_acc大于全局valid_acc，则保存
-            if local_valid_accuracy_value > global_valid_accuracy or (max_epochs - epoch) < 5:
+            if local_valid_accuracy_value > global_valid_accuracy:
                 global_valid_accuracy = local_valid_accuracy_value
                 saver.save(sess, log_path + '/Model_' + str(epoch) + '.ckpt')
-                print('---EPOCH:%d--- model has been saved' % epoch)
+                print('---EPOCH:%d--- model has been saved' % (epoch))
 
             # *本epoch中train及valid过程均完毕，记录时间
             end_time = time.time()
@@ -232,7 +235,7 @@ def train(model_class, use_batch_norm, use_shuf_pair,
                   ' learning rate: ', sess.run(learning_rate), '\n')
 
 # *测试主函数，查找最佳模型
-def test_dataset_findbest(model_class, use_shuf_pair,
+def test_dataset_findbest(model_class, use_batch_norm, use_shuf_pair,
                           test_cover_dir, test_stego_dir, max_epochs,
                           batch_size, ds_size, log_path):
     tf.reset_default_graph()
@@ -247,26 +250,30 @@ def test_dataset_findbest(model_class, use_shuf_pair,
                                name='input_image_batch')
     label_batch = tf.placeholder(tf.int32, [batch_size, ], name="input_label_batch")
     # 使用占位符初始化模型
-    model = model_class(is_training=False, data_format='NCHW', with_bn=True, tlu_threshold=3)
+    model = model_class(is_training=False, data_format='NCHW',
+                        with_bn=use_batch_norm, tlu_threshold=3)
     model._build_model(img_batch)
     loss, accuracy = model._build_losses(label_batch)
 
     # *设置需要计算的loss函数，test_loss/acc与valid_loss/acc的功用类似
     # 定义valid中使用的基于loss/acc的类（运行次数：valid_ds_size / valid_batch_size）
     test_loss_s = average_summary(loss, 'test_loss',
-                                  float(ds_size) / float(batch_size))
+                                   float(ds_size) / float(batch_size))
     test_accuracy_s = average_summary(accuracy, 'test_accuracy',
-                                      float(ds_size) / float(batch_size))
+                                       float(ds_size) / float(batch_size))
     # 验证操作（一个epoch结束后，每个valid中的iteration都要用）：valid_loss累加；valid_acc累加
     test_op = tf.group(test_loss_s.increment_op,
                        test_accuracy_s.increment_op)
+
+    # *全局变量global_step，从0开始进行计数
+    global_step = tf.Variable(0, trainable=False)
 
     # 初始化操作：初始化所有的全局变量和局部变量
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
     # *定义模型保存变量，最大存储max_to_keep个模型
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=max_epochs)
 
     # *记录每次test后得到的loss和acc
     test_loss_arr = []
@@ -275,17 +282,15 @@ def test_dataset_findbest(model_class, use_shuf_pair,
     # *对load_data_path_s列表中的所有模型进行test操作
     print('Start testing...')
     # 在log路径下搜寻所有可加载文件
-    load_model_path_s = glob(log_path + '/*.data*')
+    load_model_path_s = sorted(glob(log_path + '/*.data*'))
     for load_model_path in load_model_path_s:
         start_time = time.time()
         # *会话开始
         with tf.Session() as sess:
             # 初始化所有的全局变量和局部变量
             sess.run(init_op)
-            # 重载模型，去掉结尾的.data-000...
-            trunc_str = '.data-'
-            load_model_path_trunc = load_model_path[0:load_model_path.find(trunc_str)]
-            saver.restore(sess, load_model_path_trunc)
+            # 重载模型
+            saver.restore(sess, load_model_path)
             # 初始化test的loss和acc变量
             sess.run([test_loss_s.reset_variable_op,
                       test_accuracy_s.reset_variable_op])
@@ -336,20 +341,68 @@ def learning_rate_decay(init_learning_rate, global_step, decay_steps, decay_rate
     if decay_method == 'constant':
         decayed_learning_rate = init_learning_rate
     elif decay_method == 'exponential':
-        decayed_learning_rate = tf.train.exponential_decay(init_learning_rate, global_step,
-                                                           decay_steps, decay_rate, staircase)
+        decayed_learning_rate = tf.train.exponential_decay(init_learning_rate, global_step, decay_steps, decay_rate, staircase)
     elif decay_method == 'inverse_time':
-        decayed_learning_rate = tf.train.inverse_time_decay(init_learning_rate, global_step,
-                                                            decay_steps, decay_rate, staircase)
+        decayed_learning_rate = tf.train.inverse_time_decay(init_learning_rate, global_step, decay_steps, decay_rate, staircase)
     elif decay_method == 'natural_exp':
-        decayed_learning_rate = tf.train.natural_exp_decay(init_learning_rate, global_step,
-                                                           decay_steps, decay_rate, staircase)
+        decayed_learning_rate = tf.train.natural_exp_decay(init_learning_rate, global_step, decay_steps, decay_rate, staircase)
     elif decay_method == 'polynomial':
-        decayed_learning_rate = tf.train.polynomial_decay(init_learning_rate, global_step,
-                                                          decay_steps, decay_rate,
-                                                          end_learning_rate, power, cycle)
+        decayed_learning_rate = tf.train.polynomial_decay(init_learning_rate, global_step, decay_steps, decay_rate, end_learning_rate, power, cycle)
     else:
         decayed_learning_rate = init_learning_rate
 
     return decayed_learning_rate
 
+
+
+
+def find_best(model_class, valid_gen, test_gen, valid_batch_size, \
+              test_batch_size, valid_ds_size, test_ds_size, load_paths):
+    tf.reset_default_graph()
+    valid_runner = GeneratorRunner(valid_gen, valid_batch_size * 30)
+    img_batch, label_batch = valid_runner.get_batched_inputs(valid_batch_size)
+    model = model_class(False, 'NCHW')
+    model._build_model(img_batch)
+    loss, accuracy = model._build_losses(label_batch)
+    loss_summary = average_summary(loss, 'loss',  \
+                                          float(valid_ds_size) \
+                                          / float(valid_batch_size))
+    accuracy_summary = average_summary(accuracy, 'accuracy',  \
+                                          float(valid_ds_size) \
+                                          / float(valid_batch_size))
+    increment_op = tf.group(loss_summary.increment_op, \
+                            accuracy_summary.increment_op)
+    global_step = tf.get_variable('global_step', dtype=tf.int32, shape=[], \
+                                  initializer=tf.constant_initializer(0), \
+                                  trainable=False)
+    init_op = tf.group(tf.global_variables_initializer(), \
+                       tf.local_variables_initializer())
+    saver = tf.train.Saver(max_to_keep=10000)
+    accuracy_arr = []
+    loss_arr = []
+    print("validation")
+    for load_path in load_paths:
+        with tf.Session() as sess:
+            sess.run(init_op)
+            saver.restore(sess, load_path)  # load_path = './model/checkpoint/model.ckpt'
+            valid_runner.start_threads(sess, 1)
+            _time = time.time()
+            for j in range(0, valid_ds_size, valid_batch_size):
+                sess.run(increment_op)
+            mean_loss, mean_accuracy = sess.run([loss_summary.mean_variable ,\
+                                            accuracy_summary.mean_variable])
+            accuracy_arr.append(mean_accuracy)
+            loss_arr.append(mean_loss)
+            print(load_path)
+            print("Accuracy:", accuracy_arr[-1], "| Loss:", loss_arr[-1], \
+                    "in", time.time() - _time, "seconds.")
+    argmax = np.argmax(accuracy_arr)
+    print("best savestate:", load_paths[argmax], "with", \
+            accuracy_arr[argmax], "accuracy and", loss_arr[argmax], \
+            "loss on validation")
+    print("test:")
+    test_dataset(model_class, test_gen, test_batch_size, test_ds_size, \
+                 load_paths[argmax])
+    return argmax, accuracy_arr, loss_arr
+"""按照train方式改动
+"""
