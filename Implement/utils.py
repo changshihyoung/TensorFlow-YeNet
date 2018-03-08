@@ -82,7 +82,7 @@ def train(model_class, use_batch_norm, use_shuf_pair,
                                name='input_image_batch')
     label_batch = tf.placeholder(tf.int32, [batch_size, ], name="input_label_batch")
     # 使用占位符初始化模型
-    model = model_class(is_training=False, data_format='NCHW',
+    model = model_class(is_training=is_training, data_format='NCHW',
                         with_bn=use_batch_norm, tlu_threshold=3)
     model._build_model(img_batch)
     loss, accuracy = model._build_losses(label_batch)
