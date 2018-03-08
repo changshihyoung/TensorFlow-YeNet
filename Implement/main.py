@@ -51,14 +51,14 @@ import os
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '' if args.no_cuda else args.gpu
 
-#设置tf随机种子
+# *设置tf随机种子
 tf.set_random_seed(args.seed)
 
-#清理非对应文件
+# *清理非对应文件
 #file_clean(args.train_cover_dir, args.train_stego_dir)
 #file_clean(args.valid_cover_dir, args.valid_stego_dir)
 
-#计算数据集大小
+# *计算数据集大小
 train_ds_size = len(glob(args.train_cover_dir + '/*')) * 2
 if train_ds_size % args.batch_size != 0:
     raise ValueError("change batch size for training")
@@ -66,15 +66,13 @@ valid_ds_size = len(glob(args.valid_cover_dir + '/*')) * 2
 if valid_ds_size % args.batch_size != 0:
     raise ValueError("change batch size for validation")
 
-#optimizer部分可以调整
-optimizer = tf.train.AdadeltaOptimizer(args.lr)
 
-##训练主函数
+# *训练主函数
 train(YeNet, args.use_batch_norm, args.use_shuf_pair,
       args.train_cover_dir, args.train_stego_dir,
       args.valid_cover_dir, args.valid_stego_dir,
       args.batch_size, train_ds_size, valid_ds_size,
-      optimizer, args.log_interval, args.max_epochs,
+      args.log_interval, args.max_epochs, args.lr,
       args.log_path)
 
-##查找最佳模型主函数
+# *查找最佳模型主函数

@@ -8,17 +8,17 @@ from random import random as rand
 from random import shuffle
 
 def file_clean(cover_dir, stego_dir):
-    '''
+    """
     对cover和stego里的文件进行清理，将只存在于单个文件夹的文件、后缀名不匹配的文件删除。
-    '''
+    """
     cover_dir = cover_dir + '/'
     stego_dir = stego_dir + '/'
-    cover_list=[]
-    stego_list=[]
-    for root,dirs,files in os.walk(cover_dir):
+    cover_list = []
+    stego_list = []
+    for root, dirs, files in os.walk(cover_dir):
         for filenames in files:
             cover_list.append(filenames)
-    for root,dirs,files in os.walk(stego_dir):
+    for root, dirs, files in os.walk(stego_dir):
         for filenames in files:
             stego_list.append(filenames)
     diff_cover_list = set(cover_list).difference(set(stego_list))
@@ -34,10 +34,10 @@ def file_clean(cover_dir, stego_dir):
     print('file_clean process has completed.')
 
 def get_files(cover_dir, stego_dir, use_shuf_pair=False):
-    '''
+    """
     从cover和stego文件夹中提取图片，返回到get_batches组成batch
     shuf_pair决定了组成batch时，cover与stego是否成对
-    '''
+    """
     file = []
     for filename in os.listdir(cover_dir + '/'):
         file.append(filename)
@@ -69,9 +69,9 @@ def get_files(cover_dir, stego_dir, use_shuf_pair=False):
     return img, img_label
 
 def get_minibatches(img, img_label, batch_size):
-    '''
+    """
     替代get_batches函数的作用，批次读取数据，每次返回batch_size大小的数据
-    '''
+    """
     for start_idx in range(0, len(img) - batch_size + 1, batch_size):
         excerpt = slice(start_idx, start_idx + batch_size)
         img_minibatch = img[excerpt]
@@ -79,21 +79,21 @@ def get_minibatches(img, img_label, batch_size):
         yield img_minibatch, img_label_minibatch
 
 def get_minibatches_content_img(train_img_minibatch_list, img_height, img_width):
-    '''
+    """
     读取get_minibatches函数返回路径对应的内容，将图片实际内容转换为batch，作为返回值
-    '''
+    """
     img_num = len(train_img_minibatch_list)
     image_minibatch_content = np.zeros([img_num, img_height, img_width, 1], dtype=np.float32)
 
     i = 0
     for img_file in train_img_minibatch_list:
         content = misc.imread(img_file)
-        image_minibatch_content[i,:,:,0] = content
+        image_minibatch_content[i, :, :, 0] = content
         i = i + 1
 
     return image_minibatch_content
 
-'''
+"""
 def get_batches(img, img_label, batch_size, capacity):
     #
     #根据get_files返回的图片列表和标签列表，生成训练用batch
@@ -123,7 +123,7 @@ def get_batches(img, img_label, batch_size, capacity):
     label_batch = tf.reshape(label_batch, [batch_size])
 
     return image_batch, label_batch
-'''
+"""
 
 #-----------------------------------------------
 
