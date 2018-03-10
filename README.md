@@ -2,7 +2,7 @@
 Implementation of "Deep Learning Hierarchical Representation for Image Steganalysis" by TensorFlow
 
 ## Usage  
-Example commands(*.sh) can be found in folder “Experiment”  
+Example commands(*.sh) can be found in the root directory  
 
 ## Publication  
 Ye, Jian, J. Ni, and Y. Yi.  

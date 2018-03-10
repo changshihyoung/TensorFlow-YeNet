@@ -2,15 +2,18 @@ import argparse
 import numpy as np
 import tensorflow as tf
 from glob import glob
-from utils import *
+from preprocessing import *
 from generator import *
+from utils import *
 from YeNet import YeNet
 
 # *定义命令行输入变量
 parser = argparse.ArgumentParser(description='Tensorflow implementation of YeNet')
 
 # *根据不同操作进行不同的命令行参数定义
-input_operation = input('The operation you want to perform(train, test, datasplit):')
+operation_set = ['train', 'test', 'datatransfer', 'dataaug', 'datasplit']
+print('Operation set ', operation_set)
+input_operation = input('The operation you want to perform: ')
 if 'train' in input_operation:
     parser.add_argument('train_cover_dir', type=str, metavar='PATH',
                         help='directory of training cover images')
@@ -25,14 +28,35 @@ if 'test' in input_operation:
                         help='directory of testing cover images')
     parser.add_argument('test_stego_dir', type=str, metavar='PATH',
                         help='directory of testing stego images')
+if 'datatransfer' in input_operation:
+    parser.add_argument('source_dir', type=str, metavar='PATH',
+                        help='directory of source images')
+    parser.add_argument('dest_dir', type=str, metavar='PATH',
+                        help='directory of destination images')
+    parser.add_argument('--required-size', type=int, default=256, metavar='N',
+                        help='required size of destination images (default: 256)')
+    parser.add_argument('--required-operation', type=str, default='resize,crop,subsample', metavar='S',
+                        help='transfer operation for source image (default: resize,crop,subsample)')
+if 'dataaug' in input_operation:
+    parser.add_argument('source_dir', type=str, metavar='PATH',
+                        help='directory of source images')
+    parser.add_argument('dest_dir', type=str, metavar='PATH',
+                        help='directory of destination images')
+    parser.add_argument('--ratio-rot', type=float, default=0.5, metavar='F',
+                        help='percentage of dataset augmented by rotation (default: 0.5)')
 if 'datasplit' in input_operation:
     parser.add_argument('source_dir', type=str, metavar='PATH',
                         help='directory of source cover and stego images')
     parser.add_argument('dest_dir', type=str, metavar='PATH',
-                        help='directory of separated dataset ')
-if 'train' not in input_operation\
-        and 'test' not in input_operation \
-        and 'datasplit' not in input_operation:
+                        help='directory of separated dataset')
+    parser.add_argument('--train-percent', type=float, default=0.6, metavar='F',
+                        help='percentage of dataset used for training (default: 0.6)')
+    parser.add_argument('--valid-percent', type=float, default=0.2, metavar='F',
+                        help='percentage of dataset used for validation (default: 0.2)')
+    parser.add_argument('--test-percent', type=float, default=0.2, metavar='F',
+                        help='percentage of dataset used for testing (default: 0.2)')
+
+if input_operation not in operation_set:
     raise NotImplementedError('invalid operation')
 
 # *定义余下可选命令行参数
@@ -54,12 +78,7 @@ parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                     help='number of batches before logging training status')
 parser.add_argument('--log-path', type=str, default='logs/',
                     metavar='PATH', help='directory of log file')
-parser.add_argument('--train-percent', type=float, default=0.6, metavar='F',
-                    help='percentage of dataset used for training (default: 0.6)')
-parser.add_argument('--valid-percent', type=float, default=0.2, metavar='F',
-                    help='percentage of dataset used for validation (default: 0.2)')
-parser.add_argument('--test-percent', type=float, default=0.2, metavar='F',
-                    help='percentage of dataset used for testing (default: 0.2)')
+
 args = parser.parse_args()
 
 import os
@@ -70,6 +89,16 @@ os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 tf.set_random_seed(args.tfseed)
 
 # *根据不同操作输入执行相应函数
+if 'datatransfer' in input_operation:
+    # *数据集预处理主函数
+    data_transfer(args.source_dir, args.dest_dir,
+                  required_size=args.required_size,
+                  required_operation=args.required_operation)
+
+if 'dataaug' in input_operation:
+    # *数据集增广主函数
+    data_aug(args.source_dir, args.dest_dir, args.ratio_rot)
+
 if 'datasplit' in input_operation:
     # *数据集分割主函数
     data_split(args.source_dir, args.dest_dir,
